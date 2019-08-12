@@ -1,0 +1,24 @@
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix dct: <http://purl.org/dc/terms/> .
+@prefix skosxl: <http://www.w3.org/2008/05/skos-xl#> .
+@prefix xkos: <http://rdf-vocabulary.ddialliance.org/xkos#> .
+@prefix dcat: <http://www.w3.org/ns/dcat#> .
+@prefix skosno: <http://difi.no/skosno#> .
+@prefix schema: <http://schema.org/> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix vcard: <http://www.w3.org/2006/vcard/ns#> .
+
+<https://www.nav.no/begrepskatalog>
+	a skos:Collection ;
+	rdfs:label "Begrepskatalog BR"@nb ;
+	dct:identifier <> ;
+	dct:publisher <https://data.brreg.no/enhetsregisteret/api/enheter/974760673> ;
+	dct:description "UTKAST til Navs begrepskatalog, godkjente begreper" ;
+  dcat:contactPoint [
+		a vcard:Organization ;
+    vcard:organizationUnit "Nav - Informasjonsforvaltning";
+    vcard:hasEmail <> ;
+    vcard:hasTelephone <> ;
+  ] .
