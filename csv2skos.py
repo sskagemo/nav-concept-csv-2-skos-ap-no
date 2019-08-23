@@ -31,7 +31,6 @@ DCAT = Namespace('http://www.w3.org/ns/dcat#')
 
 
 # mappe kolonnetitlene  i begrepsfil med riktig vokabular
-# TODO: Uklart om hiddenLabel og altLabel kan være tomme literals eller må peke på en ny blank node [uklar spek]
 kolonnetitler = {
     'prefLabel.nb': SKOSXL.prefLabel,
     'altLabel.nb': SKOSXL.altLabel,
@@ -55,7 +54,9 @@ graph.bind('skosno', 'http://difi.no/skosno#')
 # Funksjon som mottar en dict med innholdet i hver linje i csv-fila og kolonnetitlene som keys, og legger til begrep
 def addConcept(subject, concept: dict) ->None:
     for i in concept:
-        if i == 'prefLabel.nb':
+        if concept[i] == "":
+            pass
+        elif (i == 'prefLabel.nb' or i == 'altLabel.nb' or i == 'hiddenLabel.nb'):
             t = BNode()
             graph.add((subject, kolonnetitler[i], t))
             graph.add((t, RDF.type, SKOSXL.Label))
@@ -125,6 +126,27 @@ with open(begrepsfil_renset, encoding='utf-8') as csv_file:
         teller += 1
 
 # Her bør det legges inn validering med pyshacl og BegrepShape.ttl, ref https://github.com/RDFLib/pySHACL
+# TODO: Fjern begrep som ikke har definisjon. Finner alle konsepter og trekker fra de som _har_ definisjon
+
+# Returnerer alle subjekt av typen skos:Concept som _ikke_ har skosno:betydningsbeskrivelse
+qres = graph.query(
+    """
+    SELECT ?s
+    {
+        ?s a skos:Concept
+        MINUS { ?s skosno:betydningsbeskrivelse ?b }
+    }
+    """
+)
+
+# går gjennom alle subjektene fra spørringen over, og fjerner først evt blanke noder knyttet til dem, deretter dem selv
+for i in qres:
+    for s, p, o in graph.triples((i[0], None, None)):
+        if type(o) == BNode:
+            graph.remove((o, None, None))
+
+    graph.remove((i[0], None, None))
+
 
 # Skrive ut RDF til *.ttl eller *.jsonld
 print("Skriver ut resultatet")
