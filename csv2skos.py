@@ -1,9 +1,8 @@
 # Todo: Finne miljø for å kjøre dette som en tjeneste, f.eks. Google App Engine
-# Todo: Nav må gi begrepene en ID, med dagens teller vil id-er endres for nye filer
 # Todo: Fjerne de siste http://jira ... -referansene
 # Todo: Se flere todo-s i koden under
-# Todo: Unngå at den siste linja blir lest som begrep (inneholder kun info om selve genereringen av csvfila
 # Todo: Legge inn kjøring av validering med SHACL opp mot BegrepShape.ttl når graphen er ferdig
+# Todo: Basere språk-tag på hva som er angitt i språkversjon pr begrep -- nå er alle tekstfelt tagget som @nb
 
 # importer de relevante modulene
 from rdflib import Namespace, Graph, BNode, URIRef, Literal
@@ -13,10 +12,11 @@ import re # regular expressions
 
 
 # filnavn
-begrepsfil='begreper.csv' # opprinnelige csv-fila fra
+begrepsfil='begreper010919.csv' # opprinnelige csv-fila fra
 begrepsfil_renset = "begreper_renset.csv" # fjernet JIRA-referanser. Fortsatt 10 referanser til http://jira ...
 katalogfil='katalog.ttl' # beskrivelse av selve katalogen, brukes direkte
 resultatfil = 'output.ttl' # den ferdige SKOS-AP-NO-fila
+publisher = 'https://data.brreg.no/enhetsregisteret/api/enheter/889640782' # URI for Nav
 
 # URI-en til begrepskatalogen. Må matche det som står i katalog.ttl
 begrepskatalog_uri = 'https://www.nav.no/begrepskatalog'
@@ -31,15 +31,18 @@ DCAT = Namespace('http://www.w3.org/ns/dcat#')
 
 
 # mappe kolonnetitlene  i begrepsfil med riktig vokabular
+# NB! Må stå i samme rekkefølge som i CSV-fila!
 kolonnetitler = {
-    'prefLabel.nb': SKOSXL.prefLabel,
-    'altLabel.nb': SKOSXL.altLabel,
-    'hiddenLabel.nb': SKOSXL.hiddenLabel,
-    'definition': SKOSNO.Definisjon, # definisjon er en del av skosno:Betydningsbeskrivelse
-    'remark.nb': SKOS.scopeNote,
-    'example': SKOS.example,
-    'subject.nb': DCTERMS.type, # kommentar til/type kilde, usikker på om dette er riktig
-    'origin': RDFS.label, # kilde knyttes til betydningsbeskrivelse via dct:source [rdfs:label "blabla"]
+    'ID': DCTERMS.identifier,
+    'Term': SKOSXL.prefLabel,
+    'Begrepsforklaring': SKOS.scopeNote,
+    'Definisjon': SKOSNO.Definisjon, # definisjon er en del av skosno:Betydningsbeskrivelse
+    'Språkversjoner': 'language',
+    'Beskrivelsestype': DCTERMS.type, # kommentar til/type kilde, usikker på om dette er riktig
+    'Alternative termer': SKOSXL.altLabel,
+    'Kilde': RDFS.label, # kilde knyttes til betydningsbeskrivelse via dct:source [rdfs:label "blabla"]
+    'Frarådde termer': SKOSXL.hiddenLabel,
+    'Eksempel': SKOS.example,
 }
 
 
@@ -56,26 +59,31 @@ def addConcept(subject, concept: dict) ->None:
     for i in concept:
         if concept[i] == "":
             pass
-        elif (i == 'prefLabel.nb' or i == 'altLabel.nb' or i == 'hiddenLabel.nb'):
+        elif (i == 'Term' or i == 'Alternative termer' or i == 'Frarådde termer'):
             t = BNode()
             graph.add((subject, kolonnetitler[i], t))
             graph.add((t, RDF.type, SKOSXL.Label))
             graph.add((t, SKOSXL.literalForm, Literal(concept[i], lang='nb')))
-        elif i == "definition":
+        elif i == "Definisjon":
             t1 = BNode()
             t2 = BNode()
             graph.add((subject, SKOSNO.betydningsbeskrivelse, t1))
-            graph.add((t1, SKOS.scopeNote, Literal(concept['remark.nb'], lang='nb')))
+            graph.add((t1, SKOS.scopeNote, Literal(concept['Begrepsforklaring'], lang='nb')))
             graph.add((t1, RDF.type, SKOSNO.Definisjon))
             graph.add((t1, RDFS.label, Literal(concept[i], lang='nb')))
-            graph.add((t1, DCTERMS.type, Literal(concept['subject.nb'], lang='nb')))
+            graph.add((t1, DCTERMS.type, Literal(concept['Beskrivelsestype'], lang='nb')))
             graph.add((t1, DCTERMS.source, t2))
-            graph.add((t2, RDFS.label, Literal(concept['origin'], lang='nb')))
-        elif i == 'origin': # håndtert som del av definisjon
+            graph.add((t2, RDFS.label, Literal(concept['Kilde'], lang='nb')))
+        elif i == 'ID':
+            subject_uri = 'https://nav.no/begrep/' + str(concept[i])
+            graph.add((subject, DCTERMS.identifier, URIRef(subject_uri)))  # TODO: Er det riktig å bruke Literal eller URIRef?
+        elif i == 'Kilde': # håndtert som del av definisjon
             pass
-        elif i == 'subject.nb': # håndtert som del av definisjon
+        elif i == 'Begrepsforklaring': # håndtert som del av definisjon
             pass
-        elif i == 'remark.nb': # håndtert som del av definisjon
+        elif i == 'Beskrivelsestype': # håndtert som del av definisjon
+            pass
+        elif i == 'Språkversjoner': # legges til fortløpende for alle relevante elementer
             pass
         else:
             graph.add((subject, kolonnetitler[i], Literal(concept[i], lang='nb')))
@@ -83,8 +91,9 @@ def addConcept(subject, concept: dict) ->None:
 
 
 # Åpner den opprinnelige fila og renser for referanser til JIRA
-with open ('begreper.csv', mode='r', encoding='utf-8') as infile:
-    with open('begreper_renset.csv', mode='w', encoding='utf-8') as outfile:
+# TODO Sjekk valg av encoding - stemmer det for filtypen vi får fra Nav?
+with open (begrepsfil, mode='r', encoding='windows-1252') as infile:
+    with open(begrepsfil_renset, mode='w', encoding='utf-8') as outfile:
         line = infile.readline()
         while line:
             line = re.sub('\|BEGREP-.{0,5}\]', "", str(line)) # regex funnet vha https://regex101.com/
@@ -105,25 +114,24 @@ with open(begrepsfil_renset, encoding='utf-8') as csv_file:
 
     # TODO: Kvalitet: Burde gjøre en test på om det er match mellom innholdet i første linje i csv og kolonnetitler.keys()
     # I tilfelle CSV-fila har fått ny layout kan det advares om ved å teste her og avbryte.
-    line = next(csv_reader) # Første linje er kolonnetitler
+    line = next(csv_reader) # Første linje er kolonnetitler, hopper over den
 
 
-    teller = 100 # for å lage url-er, starter på 100 #
     for line in csv_reader:
-        subject_uri = 'https://nav.no/begrep/' + str(teller)
-        subject = URIRef(subject_uri)
+        print(line) # debug
+        subject_uri = 'https://nav.no/begrep/' + str(line["ID"])
+        subject = URIRef(subject_uri) # lager et nytt RDF-subjekt
 
-        # Legger begrepet inn som medlem i katalogen:
+        # Legger begrepet i form av RDF-subjektet inn som medlem i katalogen:
         graph.add((URIRef(begrepskatalog_uri), SKOS.member, subject))
 
         # Legger inn verdiene som ikke er del av CSV-fila, dvs type, publisher og id.
         # TODO: Mangler også "modified" men det finnes ikke i csv-fila
         graph.add((subject, RDF.type, SKOS.Concept))
-        graph.add((subject, DCTERMS.publisher, URIRef('https://data.brreg.no/enhetsregisteret/api/enheter/889640782')))
-        graph.add((subject, DCTERMS.identifier, URIRef(subject_uri))) # er det riktig å bruke Literal eller URIRef?
+        graph.add((subject, DCTERMS.publisher, URIRef(publisher)))
 
         addConcept(subject, line) # Bruker addConcept for de verdiene som finnes i CSV-fila
-        teller += 1
+
 
 # Her bør det legges inn validering med pyshacl og BegrepShape.ttl, ref https://github.com/RDFLib/pySHACL
 # TODO: Fjern begrep som ikke har definisjon. Finner alle konsepter og trekker fra de som _har_ definisjon
@@ -138,6 +146,8 @@ qres = graph.query(
     }
     """
 )
+
+print(qres)
 
 # går gjennom alle subjektene fra spørringen over, og fjerner først evt blanke noder knyttet til dem, deretter dem selv
 for i in qres:
