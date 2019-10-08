@@ -76,7 +76,7 @@ def addConcept(subject, concept: dict) ->None:
             graph.add((t2, RDFS.label, Literal(concept['Kilde'], lang='nb')))
         elif i == 'ID':
             subject_uri = 'https://nav.no/begrep/' + str(concept[i])
-            graph.add((subject, DCTERMS.identifier, URIRef(subject_uri)))  # TODO: Er det riktig å bruke Literal eller URIRef?
+            graph.add((subject, DCTERMS.identifier, Literal(subject_uri)))
         elif i == 'Kilde': # håndtert som del av definisjon
             pass
         elif i == 'Begrepsforklaring': # håndtert som del av definisjon
